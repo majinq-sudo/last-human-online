@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Last Human Online - Final Build</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Space+Grotesk:wght@400;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --bg: #030608;
+    --panel: rgba(10, 18, 23, 0.95);
+    --border: #13222a;
+    --border2: #203a47;
+    --accent: #3de0a0;
+    --warn: #e0703d;
+    --danger: #e04040;
+    --info: #3d9de0;
+    --text: #c8dde8;
+    --text2: #7a9cac;
+    --text3: #284454;
+    
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Space Grotesk', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+
+  body {
+    background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; width: 100vw; height: 100vh;
+  }
+
+  body::before {
+    content: ''; position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(61, 224, 160, 0.02) 2px, rgba(61, 224, 160, 0.02) 4px);
+    pointer-events: none; z-index: 9999;
+  }
+
+  #gameCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
+  #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+
+  /* =========================================
+     PANTALLA DE INICIO (BOOT)
+     ========================================= */
+  #start-screen {
+    position: absolute; inset: 0; background: #030608; z-index: 10000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    transition: opacity 0.5s ease; pointer-events: auto;
+  }
+  .start-title { font-family: var(--mono); font-size: 2.5rem; color: var(--accent); letter-spacing: 5px; margin-bottom: 20px; text-shadow: 0 0 15px var(--accent); }
+  .start-text { font-family: var(--mono); color: var(--text2); margin-bottom: 40px; font-size: 14px; max-width: 400px; line-height: 1.6; text-align: left; }
+  .btn-boot { background: transparent; border: 2px solid var(--accent); color: var(--accent); padding: 15px 30px; font-family: var(--mono); font-size: 16px; cursor: pointer; transition: 0.3s; letter-spacing: 2px; }
+  .btn-boot:hover { background: var(--accent); color: #000; box-shadow: 0 0 20px var(--accent); }
+
+  /* =========================================
+     HUD PRINCIPAL
+     ========================================= */
+  #main-hud { position: absolute; top: 1.5rem; left: 1.5rem; right: 1.5rem; display: flex; justify-content: space-between; align-items: flex-start; pointer-events: none; z-index: 20; }
+  .hud-left { display: flex; flex-direction: column; gap: 8px; }
+  
+  .stat-indicator { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--text2); background: rgba(0,0,0,0.85); padding: 6px 12px; border-radius: 4px; border: 1px solid var(--border); pointer-events: auto; min-width: 150px; border-left: 3px solid var(--border2); }
+  .bar-outline { width: 40px; height: 6px; border: 1px solid var(--text3); padding: 1px; position: relative; background: #000; }
+  .bar-fill { height: 100%; width: 0%; transition: width 0.2s; }
+  
+  .action-btn { pointer-events: auto; background: rgba(5, 12, 16, 0.95); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; transition: all 0.2s; letter-spacing: 0.05em; }
+  .action-btn:hover { background: var(--border); border-color: var(--accent); color: #fff; }
+  
+  #btn-interact { display: none; border-color: var(--info); color: var(--info); animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(61, 157, 224, 0.5); } 70% { box-shadow: 0 0 0 8px rgba(61, 157, 224, 0); } 100% { box-shadow: 0 0 0 0 rgba(61, 157, 224, 0); } }
+
+  #drone-alert { display: none; position: absolute; top: 22%; left: 50%; transform: translate(-50%, -50%); background: rgba(224, 64, 64, 0.15); border: 1px solid var(--danger); color: var(--danger); font-family: var(--mono); padding: 10px 20px; font-size: 13px; border-radius: 4px; text-shadow: 0 0 4px var(--danger); z-index: 50; }
+
+  /* =========================================
+     TELÉFONO MÓVIL
+     ========================================= */
+  #phone-container { 
+    position: absolute; inset: 0; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); 
+    display: none; flex-direction: column; align-items: center; justify-content: center; 
+    pointer-events: auto; z-index: 100; transition: background 0.4s ease, backdrop-filter 0.4s ease;
+  }
+  
+  #phone-container.radar-mode { background: transparent; backdrop-filter: blur(0px); align-items: flex-end; padding-right: 3rem; }
+
+  .phone-screen { 
+    width: 320px; height: 530px; background: #030a06; border: 2px solid #14241b; border-radius: 12px; 
+    display: flex; flex-direction: column; padding: 1.2rem; box-shadow: 0 0 30px rgba(61, 224, 160, 0.08); 
+    position: relative; transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .phone-screen.scanning { transform: translate(60%, 10%) scale(0.7); opacity: 0.15; pointer-events: none; box-shadow: 0 0 50px rgba(61, 224, 160, 0.4); }
+  .phone-screen::after { content: ''; position: absolute; inset: 0; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(61, 224, 160, 0.05) 2px, rgba(61, 224, 160, 0.05) 4px); pointer-events: none; }
+  
+  .phone-status-bar { display: flex; justify-content: space-between; align-items: center; color: var(--accent); font-family: var(--mono); font-size: 10px; margin-bottom: 1.2rem; }
+  .phone-signal { display: flex; align-items: flex-end; gap: 2px; }
+  .phone-signal .bar { display: inline-block; width: 3px; background: var(--accent); }
+  .phone-signal .bar-1 { height: 4px; } .phone-signal .bar-2 { height: 6px; } .phone-signal .bar-3 { height: 8px; }
+
+  .phone-content { display: flex; flex-direction: column; flex-grow: 1; font-family: var(--mono); font-size: 13px; color: var(--accent); overflow: hidden; }
+  .sys-log-title { font-size: 13px; letter-spacing: 1px; flex-shrink: 0; color: #fff; text-shadow: 0 0 4px var(--accent); }
+  .green-line { border: none; border-top: 1px solid var(--accent); margin: 5px 0 15px 0; opacity: 0.3; }
+  
+  .phone-view { display: none; flex-direction: column; flex-grow: 1; overflow: hidden; }
+  .phone-view.active { display: flex; }
+
+  .radar-display { background: rgba(0,0,0,0.4); border: 1px solid #14241b; border-radius: 6px; padding: 12px; flex-grow: 1; display: flex; flex-direction: column; gap: 10px; font-size: 12px;}
+  .radar-log { color: var(--text2); font-size: 11px; font-family: var(--mono); line-height: 1.4; flex-grow: 1; overflow-y: auto;}
+
+  .inv-list { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; overflow-y: auto;}
+  .inv-item { border: 1px dashed var(--accent); padding: 10px; display: flex; justify-content: space-between; align-items: center; background: rgba(61, 224, 160, 0.02); }
+  .inv-empty { color: #163020; text-align: center; margin-top: 40px; border: 1px dashed #163020; padding: 20px; }
+
+  .phone-nav { display: flex; justify-content: space-between; gap: 5px; margin-top: auto; padding-top: 15px; }
+  .nav-tab { flex: 1; background: #05120a; border: 1px solid var(--accent); color: var(--accent); font-family: var(--mono); font-size: 11px; padding: 6px 0; text-align: center; border-radius: 4px; cursor: pointer;}
+  .nav-tab.active { background: var(--accent); color: #000; font-weight: bold; }
+
+  .close-btn { margin-top: 1.2rem; background: transparent; border: none; color: var(--text3); font-family: var(--mono); cursor: pointer; font-size: 11px;}
+  .close-btn:hover { color: var(--text2); }
+
+  /* =========================================
+     PC TERMINAL
+     ========================================= */
+  #desktop-container { position: absolute; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(6px); display: none; flex-direction: column; align-items: center; justify-content: center; pointer-events: auto; z-index: 200; }
+  .desktop-screen { width: 85%; max-width: 920px; height: 80vh; max-height: 580px; background: rgba(4, 8, 10, 0.98); border: 1px solid var(--border2); border-radius: 8px; display: grid; grid-template-columns: 1.14fr 0.86fr; gap: 20px; padding: 20px; box-shadow: 0 0 50px rgba(61, 157, 224, 0.08); }
+  .desktop-panel { background: rgba(0,0,0,0.5); border: 1px solid var(--border); border-radius: 6px; display: flex; flex-direction: column; overflow: hidden; }
+  .desktop-header { background: rgba(61, 157, 224, 0.06); color: var(--info); padding: 8px 15px; font-family: var(--mono); font-size: 11px; border-bottom: 1px solid var(--border); letter-spacing: 0.05em; }
+  .desktop-body { padding: 15px; flex-grow: 1; overflow-y: auto; font-family: var(--mono); font-size: 12px; display: flex; flex-direction: column; }
+
+  .chat-log { flex-grow: 1; overflow-y: auto; margin-bottom: 15px; padding-right: 5px; }
+  .chat-log p { margin-bottom: 10px; line-height: 1.5; color: var(--text); }
+  
+  .analysis-section { border: 1px solid var(--border); background: rgba(255,255,255,0.01); padding: 10px; border-radius: 4px; margin-bottom: 12px; }
+  .analysis-title { color: var(--info); font-size: 11px; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 4px; font-weight: 600;}
+  .check-list { list-style: none; font-size: 11px; color: var(--text2); }
+  .check-list li { margin-bottom: 5px; display: flex; align-items: center; gap: 8px; }
+  
+  .checkbox { width: 12px; height: 12px; border: 1px solid var(--info); display: inline-block; position: relative; background: #000; }
+  .checkbox.checked::after { content: '✓'; position: absolute; top: -4px; left: 1px; color: var(--accent); font-size: 11px; font-weight: bold; }
+  .checkbox.unchecked::after { content: '✗'; position: absolute; top: -4px; left: 2px; color: var(--danger); font-size: 11px; font-weight: bold; }
+
+  .sys-btn-group { display: flex; gap: 10px; margin-top: auto; }
+  .blink { animation: blinker 1s linear infinite; }
+  @keyframes blinker { 50% { opacity: 0; } }
+
+</style>
+</head>
+<body>
+
+  <div id="start-screen">
+      <div class="start-title">LAST HUMAN ONLINE</div>
+      <div class="start-text">
+          > CARGANDO SISTEMA OPERATIVO v4.0... OK<br>
+          > GENERANDO ENTORNO PROCEDURAL... OK<br>
+          > INICIALIZANDO MÓDULOS DE RASTREO... OK<br><br>
+          [ ADVERTENCIA ]: ZONA ALTAMENTE VIGILADA POR DRONES.<br>
+          MANTÉNGASE ALEJADO DE LAS EMISIONES SONORAS.
+      </div>
+      <button class="btn-boot" id="btn-boot">[ INICIAR ENLACE ]</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <div id="ui-layer">
+    <div id="drone-alert">⚠️ ALERTA: DRON DE RASTREO DETECTADO — ENERGÍA DRENADA</div>
+
+    <div id="main-hud">
+      <div class="hud-left">
+        <div class="stat-indicator" style="border-left-color: var(--info)">
+          <span>📅 SECTOR</span>
+          <div style="width:10px"></div>
+          <span id="sector-txt-hud" style="color:#fff; font-weight:600">01</span>
+        </div>
+        <div class="stat-indicator">
+          <span>🔋 ENERGÍA</span>
+          <div class="bar-outline"><div class="bar-fill" id="bat-fill-hud"></div></div>
+          <span id="bat-txt-hud">35%</span>
+        </div>
+        <div class="stat-indicator" style="border-left-color: var(--warn)">
+          <span>🔊 RUIDO</span>
+          <div class="bar-outline"><div class="bar-fill" id="noise-fill-hud"></div></div>
+          <span id="noise-txt-hud">0%</span>
+        </div>
+        <button id="btn-open-phone" class="action-btn" style="margin-top:4px;">📱 INTERFAZ MÓVIL</button>
+      </div>
+      <button id="btn-interact" class="action-btn">🖥️ ACCEDER A TERMINAL</button>
+    </div>
+
+    <div id="phone-container">
+      <div class="phone-screen" id="phone-ui-screen">
+        <div class="phone-status-bar">
+          <div class="phone-signal">
+            <span class="bar bar-1" id="sig-b1"></span><span class="bar bar-2" id="sig-b2"></span><span class="bar bar-3" id="sig-b3"></span>
+            <span style="margin-left: 4px; font-size: 10px;" id="phone-sig-text">3</span>
+          </div>
+          <div class="phone-battery-time"><span>14:31</span></div>
+        </div>
+        
+        <div class="phone-content">
+          <div id="view-map" class="phone-view active">
+            <div class="sys-log-title">RADAR_SWEEP_LOCAL</div>
+            <hr class="green-line">
+            <div class="radar-display">
+              <div class="radar-log" id="radar-output">
+                > SISTEMA EN ESPERA.<br>
+                > Nodos locales ocultos.<br><br>
+                [!] Presione el botón inferior para lanzar pulso. El dispositivo se apartará para despejar la vista.
+              </div>
+              <button id="btn-radar-pulse" class="action-btn" style="width:100%; border-color:var(--accent); color:var(--accent); background:rgba(61,224,160,0.05);">📡 LANZAR PULSO (-3%)</button>
+            </div>
+          </div>
+
+          <div id="view-inv" class="phone-view">
+            <div class="sys-log-title">LOCAL_INVENTORY</div>
+            <hr class="green-line">
+            <div id="inventory-container"></div>
+          </div>
+        </div>
+
+        <div class="phone-nav">
+          <button class="nav-tab active" id="tab-btn-map">M-A-P</button>
+          <button class="nav-tab" id="tab-btn-inv">I-N-V</button>
+        </div>
+      </div>
+      <button id="btn-close-phone" class="close-btn">GUARDAR DISPOSITIVO [X]</button>
+    </div>
+
+    <div id="desktop-container">
+      <div class="desktop-screen">
+        <div class="desktop-panel">
+          <div class="desktop-header" id="terminal-link-title">TERMINAL SECURE LINK // NODE_GATEWAY</div>
+          <div class="desktop-body">
+            <div class="chat-log" id="chat-history"></div>
+            <div>
+              <p class="blink" style="color: var(--info); font-family: var(--mono); margin-bottom:4px">_</p>
+              <button id="btn-reply" class="action-btn" style="width: 100%; border-color: var(--info); color: var(--info); background: transparent;">
+                > RESPONDER (-5% BATERÍA)
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="desktop-panel">
+          <div class="desktop-header">ANALYSIS TOOL v3.1_PROFILER</div>
+          <div class="desktop-body">
+            <div class="analysis-section" id="analysis-profile-history"></div>
+            <div class="analysis-section">
+              <div class="analysis-title">BEHAVIORAL STRUCTURAL CHECK</div>
+              <ul class="check-list" id="analysis-behavior-check"></ul>
+            </div>
+            <div style="margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border);">
+              <p style="text-align: center; margin-bottom: 10px; font-size: 11px; color: var(--text2); font-family: var(--mono);">[DECISIÓN CRÍTICA DE RED]</p>
+              <div class="sys-btn-group">
+                <button id="btn-mark-bot" class="action-btn" style="flex:1; border-color: var(--warn); color: var(--warn);">[A] MARCAR BOT</button>
+                <button id="btn-mark-human" class="action-btn" style="flex:1; border-color: var(--accent); color: var(--accent);">[B] MARCAR HUMANO</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <button id="btn-close-desktop" class="close-btn">DESCONECTARSE DEL NODO [X]</button>
+    </div>
+  </div>
+
+  <script>
+    // --- AUDIO ENGINE (WEB AUDIO API) ---
+    let audioCtx;
+    function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function playTone(freq, type, duration, vol=0.05) {
+        if(!audioCtx) return;
+        let osc = audioCtx.createOscillator();
+        let gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        osc.start(); osc.stop(audioCtx.currentTime + duration);
+    }
+    function soundStep() { playTone(100, 'triangle', 0.1, 0.05); } 
+    function soundBlip() { playTone(1200, 'square', 0.05, 0.02); } 
+    function soundRadar() { playTone(800, 'sine', 1.5, 0.08); playTone(600, 'sine', 1.5, 0.05); } 
+    function soundError() { playTone(150, 'sawtooth', 0.5, 0.1); } 
+    function soundSuccess() { playTone(600, 'sine', 0.1, 0.05); setTimeout(()=>playTone(800, 'sine', 0.3, 0.05), 100); } 
+
+    // --- PANTALLA INICIO ---
+    const startScreen = document.getElementById('start-screen');
+    const btnBoot = document.getElementById('btn-boot');
+    btnBoot.addEventListener('click', () => {
+        initAudio();
+        soundSuccess();
+        startScreen.style.opacity = '0';
+        setTimeout(() => { startScreen.style.display = 'none'; }, 500);
+    });
+
+    // --- CANVAS INIT ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const TILE_W = 64; 
+    const TILE_H = 32;
+    let offsetX = 0; 
+    let offsetY = 0;
+
+    function resize() { 
+      canvas.width = window.innerWidth; 
+      canvas.height = window.innerHeight; 
+      offsetX = canvas.width / 2;
+      offsetY = canvas.height / 5; 
+    }
+    window.addEventListener('resize', resize);
+
+    // --- SYSTEM STATE ---
+    let gameState = { 
+      battery: 35, noise: 0, signal: 3, sector: 1, lastTime: 0, isGameOver: false, 
+      inventory: [], droneActive: false, droneTimer: 0, trapTriggered: false, contactStatus: 'unknown',
+      radarActive: false, radarTimer: 0, drones: [] 
+    };
+    
+    let player = { gridX: 4, gridY: 4, x: 4, y: 4 };
+    const antenna = { x: 0, y: 0 };
+    
+    let MAP_SIZE = 10; 
+    let mapData = [];
+    let mapItems = [];
+    let isWaitingForReply = false;
+    let lastDroneMoveTime = 0;
+
+    // --- VISUAL FX ---
+    let fxParticles = [];
+    function initFxParticles() {
+      fxParticles = [];
+      for(let i=0; i<35; i++) { 
+        fxParticles.push({ x: Math.random()*window.innerWidth, y: Math.random()*window.innerHeight, speed: Math.random()*0.4 + 0.1, size: Math.random()*2+0.5 }); 
+      }
+    }
+
+    // --- PROFILES (MECÁNICA NARRATIVA) ---
+    const identityPool = [
+      {
+        name: "K_real_2024", isBot: true,
+        chatInit: "<p><span class='c-green'>K_real_2024:</span> Me alegra que respondieras. El refugio es real. 👍</p>",
+        responses: ["No me obligues a buscarte de forma manual. Da tu cuadrícula.", "Tengo suministros listos: raciones, celdas de litio, agua."],
+        historyHTML: "<div class='analysis-title'>PROFILE HISTORY</div><p style='color:#fff'>K_real_2024 (1d ago): Just found supplies! 🎉</p>",
+        checks: [true, true, true, false]
+      },
+      {
+        name: "xX_surv_99", isBot: false,
+        chatInit: "<p><span class='c-green'>xX_surv_99:</span> oye??? aydua porfa si hay alguien ay... </p>",
+        responses: ["me qdo sin luz... no se si el terminal aguantara", "escuche algo fuera, creo q vienen drones."],
+        historyHTML: "<div class='analysis-title'>PROFILE HISTORY</div><p style='color:#fff'>xX_surv_99 (3d ago): qda alguin vivo??</p>",
+        checks: [false, false, false, false]
+      },
+      {
+        name: "S0ul_Pr0me", isBot: true,
+        chatInit: "<p><span class='c-green'>S0ul_Pr0me:</span> Enlace seguro establecido. Coordenadas listas. 🤝</p>",
+        responses: ["Error de procesamiento: tiempo de espera superado.", "La zona exterior es peligrosa. Acércate al punto marcado."],
+        historyHTML: "<div class='analysis-title'>PROFILE HISTORY</div><p style='color:#fff'>S0ul_Pr0me (2h ago): System index updated successfully. 🔄</p>",
+        checks: [true, true, true, true]
+      },
+      {
+        name: "Echo_Vagrant", isBot: false,
+        chatInit: "<p><span class='c-green'>Echo_Vagrant:</span> Hola amigo. Encontré este repetidor encendido de milagro.</p>",
+        responses: ["Maldición, la señal baila demasiado, me muevo de sitio.", "Dime que no eres otro bot automatizado de la red... ya llevo tres."],
+        historyHTML: "<div class='analysis-title'>PROFILE HISTORY</div><p style='color:#fff'>Echo_Vagrant (12h ago): explorando subsuelo sector 3</p>",
+        checks: [false, true, false, true]
+      }
+    ];
+    let currentEntity = {};
+    let scriptIndex = 0;
+
+    // --- UI ELEMENTS ---
+    const phoneUI = document.getElementById('phone-container');
+    const phoneScreen = document.getElementById('phone-ui-screen');
+    const tabMap = document.getElementById('tab-btn-map');
+    const tabInv = document.getElementById('tab-btn-inv');
+    const viewMap = document.getElementById('view-map');
+    const viewInv = document.getElementById('view-inv');
+    const btnRadarPulse = document.getElementById('btn-radar-pulse');
+    const radarOutput = document.getElementById('radar-output');
+
+    tabMap.addEventListener('click', () => { soundBlip(); tabMap.classList.add('active'); tabInv.classList.remove('active'); viewMap.classList.add('active'); viewInv.classList.remove('active'); phoneUI.classList.add('radar-mode'); });
+    tabInv.addEventListener('click', () => { soundBlip(); tabInv.classList.add('active'); tabMap.classList.remove('active'); viewInv.classList.add('active'); viewMap.classList.remove('active'); phoneUI.classList.remove('radar-mode'); renderInventoryUI(); });
+
+    btnRadarPulse.addEventListener('click', () => {
+      if(gameState.battery < 3 || gameState.radarActive) return;
+      soundRadar();
+      gameState.battery -= 3;
+      gameState.radarActive = true;
+      gameState.radarTimer = 180; 
+      updateStatsUI();
+      
+      phoneUI.style.background = 'transparent';
+      phoneUI.style.backdropFilter = 'blur(0px)';
+      phoneScreen.classList.add('scanning');
+
+      let pcItem = mapItems.find(i => i.type === 'terminal');
+      let batItem = mapItems.find(i => i.type === 'battery_pack' && i.active);
+      let pcDist = pcItem ? Math.abs(player.gridX - pcItem.gridX) + Math.abs(player.gridY - pcItem.gridY) : 0;
+      let batDist = batItem ? Math.abs(player.gridX - batItem.gridX) + Math.abs(player.gridY - batItem.gridY) : "NO DETECTADO";
+
+      radarOutput.innerHTML = `
+        <span style="color:var(--accent)">> ¡PULSO ELECTROMAGNÉTICO EMITIDO!</span><br>
+        > Escaneando rebote de ondas radiales...<br><br>
+        <span style="color:var(--info)">[🖥️ TERMINAL]: DETECTADA</span><br>
+        > Distancia Manhattan: ${pcDist} bloques.<br><br>
+        <span style="color:var(--warn)">[🔋 ENERGÍA]: ${batItem ? "DETECTADA" : "N/A"}</span><br>
+        > Distancia Manhattan: ${batDist} bloques.<br><br>
+        <span class="blink" style="color:var(--accent)">> BALIZAS PARPADEANDO EN EL MAPA...</span>
+      `;
+    });
+
+    const desktopUI = document.getElementById('desktop-container');
+    const btnOpenPhone = document.getElementById('btn-open-phone');
+    const btnClosePhone = document.getElementById('btn-close-phone');
+    const btnInteract = document.getElementById('btn-interact');
+    const btnCloseDesktop = document.getElementById('btn-close-desktop');
+    const droneAlertUI = document.getElementById('drone-alert');
+    const inventoryContainer = document.getElementById('inventory-container');
+    const sectorTxtHud = document.getElementById('sector-txt-hud');
+    const batFillHud = document.getElementById('bat-fill-hud');
+    const batTxtHud = document.getElementById('bat-txt-hud');
+    const noiseFillHud = document.getElementById('noise-fill-hud');
+    const noiseTxtHud = document.getElementById('noise-txt-hud');
+    const chatHistory = document.getElementById('chat-history');
+    const btnReply = document.getElementById('btn-reply');
+    const btnMarkBot = document.getElementById('btn-mark-bot');
+    const btnMarkHuman = document.getElementById('btn-mark-human');
+    const b1 = document.getElementById('sig-b1'); const b2 = document.getElementById('sig-b2'); const b3 = document.getElementById('sig-b3');
+    const phoneSigText = document.getElementById('phone-sig-text');
+
+    btnOpenPhone.addEventListener('click', () => { 
+      soundBlip(); phoneUI.style.display = 'flex'; btnOpenPhone.style.display = 'none'; btnInteract.style.display = 'none'; 
+      if (tabMap.classList.contains('active')) { phoneUI.classList.add('radar-mode'); }
+    });
+    btnClosePhone.addEventListener('click', () => { 
+      soundBlip(); phoneUI.style.display = 'none'; btnOpenPhone.style.display = 'block'; checkProximity(); 
+      phoneUI.style.background = 'rgba(0,0,0,0.8)'; phoneUI.style.backdropFilter = 'blur(4px)'; phoneScreen.classList.remove('scanning');
+    });
+    btnInteract.addEventListener('click', () => { soundSuccess(); desktopUI.style.display = 'flex'; btnInteract.style.display = 'none'; btnOpenPhone.style.display = 'none'; });
+    btnCloseDesktop.addEventListener('click', () => { soundBlip(); desktopUI.style.display = 'none'; btnOpenPhone.style.display = 'block'; checkProximity(); });
+
+    function renderInventoryUI() {
+      inventoryContainer.innerHTML = "";
+      if (gameState.inventory.length === 0) { inventoryContainer.innerHTML = `<div class="inv-empty">> ALMACENAMIENTO VACÍO.</div>`; return; }
+      const list = document.createElement('div'); list.className = "inv-list";
+      gameState.inventory.forEach((item, index) => {
+        const div = document.createElement('div'); div.className = "inv-item";
+        div.innerHTML = `<div><span class="c-orange">[🔋] ${item.name}</span><br><span style="font-size:10px;color:var(--text2)">+${item.value}% Batería</span></div>
+          <button class="action-btn" style="padding:4px 8px;font-size:11px;" onclick="useItem(${index})">USAR</button>`;
+        list.appendChild(div);
+      });
+      inventoryContainer.appendChild(list);
+    }
+
+    window.useItem = function(index) {
+      const item = gameState.inventory[index];
+      if (item.type === 'battery_pack') {
+        soundSuccess();
+        gameState.battery += item.value; if (gameState.battery > 100) gameState.battery = 100;
+        gameState.inventory.splice(index, 1); updateStatsUI(); renderInventoryUI();
+      }
+    };
+
+    function appendLocalMessage(sender, text, colorClass) {
+      const msg = document.createElement('p'); msg.innerHTML = `<span class="${colorClass}">${sender}:</span> ${text}`;
+      chatHistory.appendChild(msg); chatHistory.scrollTop = chatHistory.scrollHeight;
+    }
+
+    function loadNewProfile() {
+      currentEntity = identityPool[Math.floor(Math.random() * identityPool.length)];
+      scriptIndex = 0; gameState.contactStatus = 'unknown'; isWaitingForReply = false;
+      
+      chatHistory.innerHTML = `<p class='c-blue'>[SISTEMA_LOCAL]: Buscando señal...</p><br>`;
+      setTimeout(() => {
+          soundSuccess();
+          document.getElementById('terminal-link-title').innerText = `TERMINAL SECURE LINK // ADDR: ${currentEntity.name}.net`;
+          chatHistory.innerHTML = `<p class='c-blue'>[NODO ACTIVO]: Conexión establecida remota.</p><br>` + currentEntity.chatInit;
+          document.getElementById('analysis-profile-history').innerHTML = currentEntity.historyHTML;
+          
+          const checkContainer = document.getElementById('analysis-behavior-check');
+          const labels = ["Uses perfect grammar.", "Uses varied emojis.", "Highly responsive.", "Shares data structure."];
+          checkContainer.innerHTML = "";
+          currentEntity.checks.forEach((val, idx) => { checkContainer.innerHTML += `<li><span class="checkbox ${val?'checked':'unchecked'}"></span> ${labels[idx]}</li>`; });
+
+          btnMarkBot.style.background = "transparent"; btnMarkBot.style.color = "var(--warn)"; btnMarkBot.style.opacity = "1";
+          btnMarkHuman.style.background = "transparent"; btnMarkHuman.style.color = "var(--accent)"; btnMarkHuman.style.opacity = "1";
+          resetReplyButton();
+      }, 1500);
+    }
+
+    btnReply.addEventListener('click', () => {
+      if (isWaitingForReply || gameState.contactStatus !== 'unknown' || gameState.droneActive) return;
+      if (gameState.battery >= 5) {
+        soundBlip();
+        isWaitingForReply = true; gameState.battery -= 5; 
+        appendLocalMessage("YOU", "Solicito verificación física de constantes en la red local.", "c-gray");
+        updateStatsUI(); 
+        btnReply.innerText = "> TRANSMITIENDO MENSAJE..."; btnReply.disabled = true; btnReply.style.opacity = "0.4";
+
+        setTimeout(() => {
+          if(!gameState.isGameOver && gameState.contactStatus === 'unknown' && !gameState.droneActive) {
+            soundBlip();
+            const resText = currentEntity.responses[scriptIndex % currentEntity.responses.length]; scriptIndex++;
+            appendLocalMessage(currentEntity.name, resText, "c-green");
+          }
+          isWaitingForReply = false; updateStatsUI();
+        }, 1200);
+      } else {
+        soundError();
+        btnReply.innerText = "> ENERGÍA INSUFICIENTE"; btnReply.style.borderColor = "var(--danger)";
+      }
+    });
+
+    btnMarkBot.addEventListener('click', () => {
+      if(gameState.contactStatus !== 'unknown') return;
+      btnMarkBot.style.background = "var(--warn)"; btnMarkBot.style.color = "#000"; btnMarkHuman.style.opacity = "0.2";
+      
+      if (currentEntity.isBot) {
+        soundSuccess();
+        gameState.contactStatus = 'bot_correct'; gameState.battery = Math.min(100, gameState.battery + 8);
+        appendLocalMessage("SYSTEM_LOCAL", "CORRECTO: BOT FILTRADO (+8% ENERGÍA). RASTREANDO NUEVO NODO EN 3S...", "c-orange");
+      } else {
+        soundError();
+        gameState.contactStatus = 'bot_wrong'; gameState.battery -= 10;
+        appendLocalMessage("SISTEMA_LOCAL", "ERROR: BLOQUEASTE A UN SUPERVIVIENTE REAL (-10% ENERGÍA). RASTREANDO NUEVO NODO EN 3S...", "c-danger");
+      }
+      
+      btnReply.innerText = "> RECALCULANDO RED..."; btnReply.disabled = true;
+      updateStatsUI();
+      setTimeout(() => { loadNewProfile(); }, 3000);
+    });
+
+    btnMarkHuman.addEventListener('click', () => {
+      if(gameState.contactStatus !== 'unknown') return;
+      btnMarkHuman.style.background = "var(--accent)"; btnMarkHuman.style.color = "#000"; btnMarkBot.style.opacity = "0.2";
+      if (!currentEntity.isBot) {
+        soundSuccess();
+        gameState.contactStatus = 'human_correct'; appendLocalMessage("SISTEMA_LOCAL", "CORRECTO: HUMANO COMPROBADO. COORDENADAS VINCULADAS.", "c-blue");
+        mapItems.push({ gridX: 1, gridY: 1, type: 'safehouse', name: 'Búnker Humano', active: true });
+      } else {
+        soundError();
+        gameState.contactStatus = 'human_wrong'; gameState.trapTriggered = true;
+        appendLocalMessage("SYSTEM_CRITICAL", "TRAMPA EN RECTIFICADOR: ERA UN BOT. INYECTANDO ALERTA.", "c-red");
+        triggerScreenGlitch(true);
+        mapItems.push({ gridX: 1, gridY: 1, type: 'safehouse', name: 'Salida de Emergencia', active: true });
+      }
+      btnReply.innerText = "> ENLACE COMPLETADO"; btnReply.disabled = true;
+    });
+
+    // --- PROCEDURAL GENERATOR ---
+    function setupProceduralSector() {
+      mapData = []; mapItems = []; gameState.drones = [];
+      gameState.isGameOver = false; isWaitingForReply = false; gameState.contactStatus = 'unknown';
+      gameState.radarActive = false; gameState.radarTimer = 0;
+      
+      radarOutput.innerHTML = `> SISTEMA EN ESPERA.<br>> Ubicación de nodos locales oculta.<br><br>[!] Presione el botón inferior para lanzar un pulso electromagnético local.`;
+
+      MAP_SIZE = Math.min(14, 9 + gameState.sector);
+      let wallDensity = 0.14 + (gameState.sector * 0.02);
+
+      for (let y = 0; y < MAP_SIZE; y++) {
+        mapData[y] = [];
+        for (let x = 0; x < MAP_SIZE; x++) { mapData[y][x] = (Math.random() < wallDensity) ? 1 : 0; }
+      }
+
+      player.gridX = Math.floor(MAP_SIZE/2); player.gridY = Math.floor(MAP_SIZE/2);
+      player.x = player.gridX; player.y = player.gridY;
+      mapData[player.gridY][player.gridX] = 0;
+      if(mapData[player.gridY+1]) mapData[player.gridY+1][player.gridX] = 0; 
+      if(mapData[player.gridY-1]) mapData[player.gridY-1][player.gridX] = 0;
+
+      function findEmptyTile() {
+        let tx, ty;
+        do {
+          tx = Math.floor(Math.random() * MAP_SIZE); ty = Math.floor(Math.random() * MAP_SIZE);
+        } while (mapData[ty][tx] !== 0 || (tx === player.gridX && ty === player.gridY) || mapItems.some(i => i.gridX === tx && i.gridY === ty) || gameState.drones.some(d => d.gridX === tx && d.gridY === ty));
+        return { x: tx, y: ty };
+      }
+
+      const bat = findEmptyTile(); mapItems.push({ gridX: bat.x, gridY: bat.y, type: 'battery_pack', name: 'Celda de Energía', value: 25, active: true });
+      const pc = findEmptyTile(); mapItems.push({ gridX: pc.x, gridY: pc.y, type: 'terminal', name: 'PC Abandonado', active: true });
+
+      let numDrones = Math.min(4, Math.floor(gameState.sector / 2) + 1);
+      for(let i=0; i<numDrones; i++) {
+        let dt = findEmptyTile();
+        gameState.drones.push({ gridX: dt.x, gridY: dt.y });
+      }
+
+      loadNewProfile();
+    }
+
+    // --- DRONES & ENVIRONMENT ENGINE ---
+    function processEnvironmentalSystems() {
+      if (gameState.droneActive) {
+        gameState.droneTimer--;
+        if (gameState.droneTimer <= 0 && !gameState.trapTriggered) { gameState.droneActive = false; droneAlertUI.style.display = 'none'; updateStatsUI(); }
+      }
+      if (gameState.noise > 0) {
+        gameState.noise -= 0.15; if (gameState.noise < 0) gameState.noise = 0;
+        updateStatsUI();
+      }
+      if (gameState.radarActive) {
+        gameState.radarTimer--;
+        if (gameState.radarTimer <= 0) {
+          gameState.radarActive = false;
+          phoneUI.style.background = 'rgba(0,0,0,0.8)';
+          phoneUI.style.backdropFilter = 'blur(4px)';
+          phoneScreen.classList.remove('scanning');
+          radarOutput.innerHTML = `> PULSO AGOTADO.<br>> Nodos ocultos de nuevo.<br><br>[!] Lance otro pulso electromagnético si necesita orientación.`;
+        }
+      }
+    }
+
+    function moveDronesFisicos() {
+      if(gameState.isGameOver || phoneUI.style.display === 'flex' || desktopUI.style.display === 'flex') return;
+
+      gameState.drones.forEach(drone => {
+        let dx = 0, dy = 0;
+        if (gameState.noise > 50) {
+          if (player.gridX > drone.gridX) dx = 1; else if (player.gridX < drone.gridX) dx = -1;
+          if (player.gridY > drone.gridY) dy = 1; else if (player.gridY < drone.gridY) dy = -1;
+          if (dx !== 0 && dy !== 0) { if (Math.random() < 0.5) dx = 0; else dy = 0; }
+        } else {
+          const dirs = [[0,1],[0,-1],[1,0],[-1,0]];
+          const pick = dirs[Math.floor(Math.random()*dirs.length)];
+          dx = pick[0]; dy = pick[1];
+        }
+
+        let newX = drone.gridX + dx; let newY = drone.gridY + dy;
+        if (newX >= 0 && newX < MAP_SIZE && newY >= 0 && newY < MAP_SIZE && mapData[newY][newX] === 0) {
+           drone.gridX = newX; drone.gridY = newY;
+        }
+
+        if (drone.gridX === Math.round(player.gridX) && drone.gridY === Math.round(player.gridY)) {
+          triggerScreenGlitch(false);
+          let safeRespawnX, safeRespawnY;
+          do { safeRespawnX = Math.floor(Math.random() * MAP_SIZE); safeRespawnY = Math.floor(Math.random() * MAP_SIZE); } 
+          while (mapData[safeRespawnY][safeRespawnX] !== 0 || (safeRespawnX === Math.round(player.gridX) && safeRespawnY === Math.round(player.gridY)));
+          drone.gridX = safeRespawnX; drone.gridY = safeRespawnY;
+        }
+      });
+    }
+
+    function triggerScreenGlitch(isTrap = false) {
+      soundError();
+      gameState.droneActive = true; gameState.droneTimer = isTrap ? 600 : 150; 
+      gameState.battery -= 15; 
+      droneAlertUI.style.display = 'block';
+      if(desktopUI.style.display === 'flex') { btnReply.innerText = "> CONEXIÓN COMPROMETIDA POR ACCIÓN RADIAL"; btnReply.disabled = true; }
+      updateStatsUI();
+    }
+
+    function updateStatsUI() {
+      if (gameState.battery < 0) gameState.battery = 0;
+      const bPct = Math.floor(gameState.battery); const nPct = Math.floor(gameState.noise);
+
+      if(sectorTxtHud) sectorTxtHud.innerText = String(gameState.sector).padStart(2, '0');
+      if(batTxtHud) batTxtHud.innerText = bPct + "%";
+      if(batFillHud) { batFillHud.style.width = bPct + "%"; batFillHud.style.backgroundColor = bPct <= 6 ? 'var(--danger)' : 'var(--warn)'; }
+      if(noiseTxtHud) noiseTxtHud.innerText = nPct + "%";
+      if(noiseFillHud) { noiseFillHud.style.width = nPct + "%"; noiseFillHud.style.backgroundColor = nPct > 80 ? 'var(--danger)' : 'var(--info)'; }
+
+      const distance = Math.abs(player.gridX - antenna.x) + Math.abs(player.gridY - antenna.y);
+      let sig = (gameState.droneActive || gameState.trapTriggered) ? 0 : (distance <= 4 ? 3 : (distance <= 8 ? 2 : 1));
+      
+      if (sig === 0) {
+        b1.style.opacity=0.2; b2.style.opacity=0.2; b3.style.opacity=0.2; phoneSigText.innerText="0";
+        if(!isWaitingForReply && gameState.contactStatus === 'unknown') { btnReply.innerText = "> ERROR: RED INTERFERIDA / CAÍDA"; btnReply.disabled = true; }
+      } else {
+        if(sig === 3) { b1.style.opacity=1; b2.style.opacity=1; b3.style.opacity=1; phoneSigText.innerText="3"; }
+        else if(sig === 2) { b1.style.opacity=1; b2.style.opacity=1; b3.style.opacity=0.2; phoneSigText.innerText="2"; }
+        else if(sig === 1) { b1.style.opacity=1; b2.style.opacity=0.2; b3.style.opacity=0.2; phoneSigText.innerText="1"; }
+        resetReplyButton();
+      }
+      if (bPct <= 0 && !gameState.isGameOver) { gameState.isGameOver = true; triggerGameOver(); }
+    }
+
+    function triggerGameOver() {
+      soundError();
+      alert("CONEXIÓN TERMINADA: Dispositivo descargado. Se te ha perdido el rastro.");
+      desktopUI.style.display = 'none'; phoneUI.style.display = 'none'; btnOpenPhone.style.display = 'block'; droneAlertUI.style.display = 'none';
+      
+      phoneUI.style.background = 'rgba(0,0,0,0.8)';
+      phoneUI.style.backdropFilter = 'blur(4px)';
+      phoneScreen.classList.remove('scanning');
+
+      gameState.battery = 35; gameState.noise = 0; gameState.sector = 1; gameState.droneActive = false; gameState.trapTriggered = false; gameState.inventory = [];
+      setupProceduralSector(); updateStatsUI(); checkProximity();
+    }
+
+    // --- GRAPHICS ENGINE ISOMÉTRICO ---
+    function toIso(x, y) { return { isoX: (x - y) * (TILE_W / 2), isoY: (x + y) * (TILE_H / 2) }; }
+
+    function drawTile(x, y, type) {
+      if (type === 1) { 
+        let h = 20;
+        let glowOpacity = 0.4 + Math.sin(Date.now() / 200) * 0.2;
+        ctx.fillStyle = '#0b1216'; ctx.beginPath(); ctx.moveTo(x - TILE_W / 2, y); ctx.lineTo(x, y + TILE_H / 2); ctx.lineTo(x, y + TILE_H / 2 + h); ctx.lineTo(x - TILE_W / 2, y + h); ctx.closePath(); ctx.fill(); ctx.strokeStyle = '#1a272e'; ctx.stroke();
+        ctx.fillStyle = '#121c22'; ctx.beginPath(); ctx.moveTo(x, y + TILE_H / 2); ctx.lineTo(x + TILE_W / 2, y); ctx.lineTo(x + TILE_W / 2, y + h); ctx.lineTo(x, y + TILE_H / 2 + h); ctx.closePath(); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = '#1c2d37'; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + TILE_W / 2, y); ctx.lineTo(x, y + TILE_H / 2); ctx.lineTo(x - TILE_W / 2, y); ctx.closePath(); ctx.fill(); 
+        ctx.strokeStyle = `rgba(61, 224, 160, ${glowOpacity})`; ctx.lineWidth = 1; ctx.stroke();
+      } else {
+        ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + TILE_W / 2, y + TILE_H / 2); ctx.lineTo(x, y + TILE_H); ctx.lineTo(x - TILE_W / 2, y + TILE_H / 2); ctx.closePath();
+        ctx.fillStyle = '#070b0d'; ctx.strokeStyle = '#10171a'; ctx.lineWidth = 1; ctx.fill(); ctx.stroke();
+      }
+    }
+
+    function renderScene() {
+      ctx.fillStyle = '#030608';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let y = 0; y < MAP_SIZE; y++) {
+        for (let x = 0; x < MAP_SIZE; x++) { 
+          if(mapData[y] && mapData[y][x] !== undefined) {
+            const { isoX, isoY } = toIso(x, y);
+            const drawX = offsetX + isoX;
+            const drawY = offsetY + isoY;
+            
+            drawTile(drawX, drawY, mapData[y][x]); 
+            
+            mapItems.forEach(item => {
+              if (item.active && item.gridX === x && item.gridY === y) {
+                if (item.type !== 'safehouse' && !gameState.radarActive) return; 
+                let radarBlinkAlpha = 1.0;
+                if (gameState.radarActive) radarBlinkAlpha = 0.3 + Math.abs(Math.sin(Date.now() / 80)) * 0.7;
+
+                ctx.globalAlpha = (item.type !== 'safehouse') ? radarBlinkAlpha : 1.0;
+                ctx.beginPath(); ctx.arc(drawX, drawY + TILE_H / 2, 6, 0, Math.PI * 2);
+                if (item.type === 'battery_pack') { ctx.fillStyle = '#e0703d'; } 
+                else if (item.type === 'terminal') { ctx.fillStyle = '#3d9de0'; } 
+                else if (item.type === 'safehouse') { ctx.fillStyle = '#3de0a0'; }
+                ctx.fill(); ctx.strokeStyle = '#fff'; ctx.stroke();
+                ctx.globalAlpha = 1.0;
+              }
+            });
+
+            gameState.drones.forEach(drone => {
+              if (drone.gridX === x && drone.gridY === y) {
+                ctx.beginPath(); ctx.moveTo(drawX, drawY + TILE_H / 2 - 14); ctx.lineTo(drawX + 6, drawY + TILE_H / 2 - 7); ctx.lineTo(drawX, drawY + TILE_H / 2); ctx.lineTo(drawX - 6, drawY + TILE_H / 2 - 7); ctx.closePath();
+                ctx.fillStyle = 'rgba(224, 64, 64, 0.85)'; ctx.fill();
+                ctx.strokeStyle = '#ff3333'; ctx.lineWidth = 1; ctx.stroke();
+              }
+            });
+
+            if (Math.round(player.gridX) === x && Math.round(player.gridY) === y) {
+              const pIso = toIso(player.x, player.y);
+              ctx.beginPath(); ctx.arc(offsetX + pIso.isoX, offsetY + pIso.isoY + TILE_H / 2 - 4, 7, 0, Math.PI * 2);
+              ctx.fillStyle = '#3de0a0'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+            }
+          }
+        }
+      }
+    }
+
+    function updateAndDrawParticles() {
+      ctx.fillStyle = 'rgba(61, 224, 160, 0.12)';
+      fxParticles.forEach(p => { p.y -= p.speed; if (p.y < 0) p.y = window.innerHeight; ctx.fillRect(p.x, p.y, p.size, p.size); });
+    }
+
+    function applyScreenGlitchEffects() {
+      if ((gameState.droneActive || gameState.trapTriggered) && Math.random() < 0.25) {
+        ctx.fillStyle = 'rgba(224, 64, 64, 0.1)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.strokeStyle = 'rgba(224, 64, 64, 0.4)'; ctx.lineWidth = Math.random()*3;
+        ctx.beginPath(); let randY = Math.random() * canvas.height; ctx.moveTo(0, randY); ctx.lineTo(canvas.width, randY); ctx.stroke();
+      }
+    }
+
+    function checkProximity() {
+      let onTerminal = false;
+      mapItems.forEach(item => {
+        if (item.active && Math.round(player.gridX) === item.gridX && Math.round(player.gridY) === item.gridY) {
+          if (item.type === 'battery_pack') {
+            item.active = false; gameState.inventory.push({ type: item.type, name: item.name, value: 25 });
+            soundSuccess();
+            alert(`SISTEMA: Celda de energía recolectada.`); updateStatsUI();
+          } else if (item.type === 'terminal') { onTerminal = true; } 
+          else if (item.type === 'safehouse') {
+            soundSuccess();
+            gameState.sector += 1; gameState.battery = Math.min(100, gameState.battery + 12);
+            gameState.trapTriggered = false; gameState.droneActive = false;
+            alert(`[AVANCE]: Accediendo a Sector ${gameState.sector}...`);
+            setupProceduralSector(); updateStatsUI();
+          }
+        }
+      });
+      btnInteract.style.display = (onTerminal && desktopUI.style.display !== 'flex') ? 'block' : 'none';
+    }
+
+    function tryMove(newGridX, newGridY) {
+      if (gameState.isGameOver || phoneUI.style.display === 'flex' || desktopUI.style.display === 'flex') return;
+      if (newGridX >= 0 && newGridX < MAP_SIZE && newGridY >= 0 && newGridY < MAP_SIZE) {
+        if (mapData[newGridY][newGridX] === 0) {
+          
+          if (player.gridX !== newGridX || player.gridY !== newGridY) {
+            soundStep();
+            const steps = Math.abs(newGridX - player.gridX) + Math.abs(newGridY - player.gridY);
+            player.gridX = newGridX; player.gridY = newGridY;
+            gameState.battery -= 0.4;
+            gameState.noise += (steps > 1) ? 26 : 13;
+            
+            if (gameState.drones.some(d => d.gridX === newGridX && d.gridY === newGridY)) {
+               triggerScreenGlitch(false);
+               let dronColisionado = gameState.drones.find(d => d.gridX === newGridX && d.gridY === newGridY);
+               if(dronColisionado) { dronColisionado.gridX = 0; dronColisionado.gridY = 0; } 
+            }
+
+            if (gameState.noise >= 100) { gameState.noise = 100; triggerDroneAttack(false); }
+            updateStatsUI(); checkProximity();
+          }
+        }
+      }
+    }
+
+    function resetReplyButton() {
+      if (isWaitingForReply || gameState.contactStatus !== 'unknown') return;
+      if (!gameState.isGameOver && !gameState.droneActive) {
+        btnReply.disabled = false; btnReply.innerText = "> RESPONDER (-5% BATERÍA)";
+        btnReply.style.borderColor = "var(--info)"; btnReply.style.color = "var(--info)"; btnReply.style.opacity = "1"; btnReply.style.background = "transparent";
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      let newX = Math.round(player.gridX); let newY = Math.round(player.gridY);
+      if (e.key === 'ArrowUp' || e.key === 'w') newY--; if (e.key === 'ArrowDown' || e.key === 's') newY++;
+      if (e.key === 'ArrowLeft' || e.key === 'a') newX--; if (e.key === 'ArrowRight' || e.key === 'd') newX++;
+      tryMove(newX, newY);
+    });
+
+    const getTargetTile = (clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      const relX = clientX - rect.left - offsetX; 
+      const relY = clientY - rect.top - offsetY;
+      return { 
+        x: Math.floor((relY / (TILE_H / 2) + relX / (TILE_W / 2)) / 2), 
+        y: Math.floor((relY / (TILE_H / 2) - relX / (TILE_W / 2)) / 2) 
+      };
+    };
+
+    canvas.addEventListener('click', (e) => {
+      const targetTile = getTargetTile(e.clientX, e.clientY);
+      tryMove(targetTile.x, targetTile.y);
+    });
+
+    function gameLoop(timestamp) {
+      player.x += (player.gridX - player.x) * 0.16; 
+      player.y += (player.gridY - player.y) * 0.16;
+      
+      processEnvironmentalSystems();
+      
+      if (timestamp - lastDroneMoveTime > 800) {
+        moveDronesFisicos();
+        lastDroneMoveTime = timestamp;
+      }
+      
+      renderScene(); 
+      updateAndDrawParticles(); 
+      applyScreenGlitchEffects();
+      
+      requestAnimationFrame(gameLoop);
+    }
+
+    window.onload = () => {
+        resize();
+        initFxParticles(); 
+        setupProceduralSector(); 
+        updateStatsUI(); 
+        requestAnimationFrame(gameLoop);
+    };
+  </script>
+</body>
+</html>
